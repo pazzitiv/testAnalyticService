@@ -1,0 +1,51 @@
+version: '3'
+
+services:
+  build:
+    image: golang:1.19-alpine3.17
+    restart: on-failure
+    volumes:
+      - ./:/app
+    working_dir: /app
+    command: /bin/sh -c "/app/run.sh build"
+
+  analytic-service:
+    image: golang:1.19-alpine3.17
+    restart: on-failure
+    ports:
+      - 8888:3333
+    volumes:
+      - ./bin/analytics-service:/app/analytics-service
+    command: /app/analytics-service
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3333
+      - DBHOST=analytic-db
+      - DBPORT=5432
+      - DBNAME=analystics
+      - DBUSERNAME=dbuser
+      - DBPASSWORD=dbpass
+    depends_on:
+      build:
+        condition: service_completed_successfully
+      analytic-db:
+        condition: service_healthy
+
+  analytic-db:
+    image: postgres
+    restart: always
+    volumes:
+      - ./db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_DB=analystics
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=dbpass
+    ports:
+      - 5432:5432
+
+  db-adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
