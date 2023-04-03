@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:generate mockgen -source=analytics.go -destination=./analytics_mock.go -package=pgsql
+//go:generate mockgen -source=source.go -destination=./source_mock.go -package=pgsql
 
 type AnalyticsData struct {
 	UserId    string    `db:"user_id"`
@@ -15,21 +16,21 @@ type AnalyticsData struct {
 	TimeStamp time.Time `db:"time"`
 }
 
-type AnalyticsSource interface {
+type Source interface {
 	AddAnalytics(ctx context.Context, data *AnalyticsData) error
 }
 
-func NewAnalyticsSource(db *pgx.Conn) AnalyticsSource {
-	return &analyticsSource{
+func NewSource(db *pgxpool.Pool) Source {
+	return &source{
 		db: db,
 	}
 }
 
-type analyticsSource struct {
-	db *pgx.Conn
+type source struct {
+	db *pgxpool.Pool
 }
 
-func (s *analyticsSource) AddAnalytics(ctx context.Context, data *AnalyticsData) error {
+func (s *source) AddAnalytics(ctx context.Context, data *AnalyticsData) error {
 	rows := [][]interface{}{{data.UserId, data.Data, data.TimeStamp}}
 	_, err := s.db.CopyFrom(
 		context.Background(),

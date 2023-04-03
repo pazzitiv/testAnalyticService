@@ -13,7 +13,7 @@ import (
 //go:generate mockgen -source=analytics.go -destination=./analytics_mock.go -package=internal
 
 type AnalyticsRepository interface {
-	Add(ctx context.Context, userId string, data AnalyticData) error
+	Add(ctx context.Context, data AnalyticData) error
 }
 
 type AnalyticData struct {
@@ -32,19 +32,28 @@ type AnalyticBody struct {
 }
 
 type analyticsRepository struct {
+	source pgsql.Source
 	logger *zap.Logger
-	source pgsql.AnalyticsSource
 }
 
-func NewAnalyticsRepository(logger *zap.Logger, source pgsql.AnalyticsSource) AnalyticsRepository {
+func NewAnalyticsRepository(source pgsql.Source, logger *zap.Logger) AnalyticsRepository {
 	return &analyticsRepository{
-		logger: logger,
 		source: source,
+		logger: logger,
 	}
 }
 
-func (r *analyticsRepository) Add(ctx context.Context, userId string, data AnalyticData) error {
+func (r *analyticsRepository) Add(ctx context.Context, data AnalyticData) error {
 	timeStamp := time.Now()
+
+	authHeader, ok := data.Headers["X-Tantum-Authorization"]
+	if !ok {
+		return fmt.Errorf("no auth header")
+	}
+	if len(authHeader) != 1 {
+		return fmt.Errorf("incorrect auth header")
+	}
+	userId := authHeader[0]
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("add analytics error: %w", err)

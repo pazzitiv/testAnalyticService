@@ -35,15 +35,15 @@ func (m *MockAnalyticsRepository) EXPECT() *MockAnalyticsRepositoryMockRecorder 
 }
 
 // Add mocks base method.
-func (m *MockAnalyticsRepository) Add(ctx context.Context, userId string, data AnalyticData) error {
+func (m *MockAnalyticsRepository) Add(ctx context.Context, data AnalyticData) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", ctx, userId, data)
+	ret := m.ctrl.Call(m, "Add", ctx, data)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Add indicates an expected call of Add.
-func (mr *MockAnalyticsRepositoryMockRecorder) Add(ctx, userId, data interface{}) *gomock.Call {
+func (mr *MockAnalyticsRepositoryMockRecorder) Add(ctx, data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockAnalyticsRepository)(nil).Add), ctx, userId, data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockAnalyticsRepository)(nil).Add), ctx, data)
 }

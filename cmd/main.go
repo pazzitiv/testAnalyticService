@@ -6,12 +6,13 @@ import (
 	"log"
 	"sync"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jessevdk/go-flags"
 	"go.uber.org/zap"
 	"testAnalyticService/internal"
 	"testAnalyticService/internal/api/http"
 	"testAnalyticService/internal/source/pgsql"
+	"testAnalyticService/internal/worker"
 )
 
 func main() {
@@ -22,6 +23,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Config parse failed: %v", err)
 	}
+
+	cfg.LogLevel = "debug"
+	cfg.Port = 8888
+	cfg.DBName = "analystics"
+	cfg.DBHost = "localhost"
+	cfg.DBPort = 5432
+	cfg.DBUsername = "dbuser"
+	cfg.DBPassword = "dbpass"
 
 	logger, err := initLogger(cfg.LogLevel)
 	if err != nil {
@@ -37,8 +46,9 @@ func main() {
 		logger.Fatal(fmt.Sprintf("init db error: %s", err))
 	}
 
-	analysticsSource := pgsql.NewAnalyticsSource(dbConn)
-	analysticsRepo := internal.NewAnalyticsRepository(logger, analysticsSource)
+	pgSource := pgsql.NewSource(dbConn)
+	analysticsRepo := internal.NewAnalyticsRepository(pgSource, logger)
+	analysticsWorker := worker.NewWorker(ctx, analysticsRepo, logger)
 
 	wg.Add(1)
 	go func() {
@@ -49,7 +59,7 @@ func main() {
 			wg.Done()
 		}()
 
-		httpServer := http.NewHTTPServer(cfg.Host, cfg.Port, analysticsRepo, logger)
+		httpServer := http.NewHTTPServer(cfg.Host, cfg.Port, analysticsWorker, logger)
 		err := httpServer.Start(ctx)
 		if err != nil {
 			logger.Fatal("http-server error", zap.Error(err))
@@ -62,26 +72,22 @@ func main() {
 			wg.Done()
 		}()
 		<-ctx.Done()
-		err := dbConn.Close(ctx)
-		if err != nil {
-			logger.Error("db connect close error", zap.Error(err))
-		}
+		dbConn.Close()
 	}()
 
 	wg.Wait()
 	logger.Warn("Application is shutdown")
 }
 
-func initDb(ctx context.Context, host string, port int, dbName, user, password string) (*pgx.Conn, error) {
+func initDb(ctx context.Context, host string, port int, dbName, user, password string) (*pgxpool.Pool, error) {
 	dbUrl := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", user, password, host, port, dbName)
 	dbCtx, dbCancel := context.WithCancel(ctx)
 	defer dbCancel()
 
-	conn, err := pgx.Connect(dbCtx, dbUrl)
+	conn, err := pgxpool.New(dbCtx, dbUrl)
 	if err != nil {
 		return nil, fmt.Errorf("connect to database error: %s", err)
 	}
-
 	return conn, nil
 }
 
