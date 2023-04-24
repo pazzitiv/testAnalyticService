@@ -24,21 +24,19 @@ func main() {
 		log.Fatalf("Config parse failed: %v", err)
 	}
 
-	cfg.LogLevel = "debug"
-	cfg.Port = 8888
-	cfg.DBName = "analystics"
-	cfg.DBHost = "localhost"
-	cfg.DBPort = 5432
-	cfg.DBUsername = "dbuser"
-	cfg.DBPassword = "dbpass"
-
 	logger, err := initLogger(cfg.LogLevel)
 	if err != nil {
 		log.Fatalf("can't init logger: %v", err)
 		return
 	}
+	defer func() {
+		if e := recover(); e != nil {
+			logger.Fatal("panic error", zap.Error(fmt.Errorf("%s", e)))
+		}
+	}()
 
-	ctx := context.Background()
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
 	wg := sync.WaitGroup{}
 
 	dbConn, err := initDb(ctx, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUsername, cfg.DBPassword)
@@ -54,13 +52,15 @@ func main() {
 	go func() {
 		defer func() {
 			if e := recover(); e != nil {
-				logger.Fatal("http-server panic error", zap.Any("error", e))
+				logger.Fatal("http-server panic error", zap.Error(fmt.Errorf("%s", e)))
 			}
 			wg.Done()
 		}()
 
 		httpServer := http.NewHTTPServer(cfg.Host, cfg.Port, analysticsWorker, logger)
 		err := httpServer.Start(ctx)
+		// Отменяем контекст, если HTTP-сервер завершил работу
+		cancelCtx()
 		if err != nil {
 			logger.Fatal("http-server error", zap.Error(err))
 		}
